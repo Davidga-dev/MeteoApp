@@ -4,6 +4,7 @@ const state = {
   tempHistory: [],
   humHistory: [],
   pressureHistory: [],
+  airHistory: [],
   labels: [],
   latestData: null,
   settings: {
@@ -11,6 +12,8 @@ const state = {
     refreshRate: 10,
     connectionMode: "sim",
     wsUrl: "ws://192.168.1.120:81",
+    themeMode: "night",
+    sidebarCollapsed: false,
   },
   thresholds: {
     tempMax: 32,
@@ -22,6 +25,7 @@ const state = {
     ws: null,
     reconnectTimer: null,
     attempts: 0,
+    shouldReconnect: false,
   },
 };
 
@@ -39,6 +43,10 @@ const tempValue = document.getElementById("temp-value");
 const humValue = document.getElementById("hum-value");
 const presValue = document.getElementById("pres-value");
 const airValue = document.getElementById("air-value");
+const tempTrend = document.getElementById("temp-trend");
+const humTrend = document.getElementById("hum-trend");
+const presTrend = document.getElementById("pres-trend");
+const airTrend = document.getElementById("air-trend");
 const alertsList = document.getElementById("alerts-list");
 const lastUpdate = document.getElementById("last-update");
 const liveClock = document.getElementById("live-clock");
@@ -54,6 +62,7 @@ const metricModal = document.getElementById("metric-modal");
 const modalTitle = document.getElementById("modal-title");
 const modalMainValue = document.getElementById("modal-main-value");
 const modalContext = document.getElementById("modal-context");
+const sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
 
 let timerId = null;
 let clockTimerId = null;
@@ -81,6 +90,9 @@ function loadPersisted() {
   if (savedStations) state.stations = JSON.parse(savedStations);
   if (savedActiveStation) state.activeStation = savedActiveStation;
 
+  state.settings.themeMode = state.settings.themeMode || "night";
+  state.settings.sidebarCollapsed = Boolean(state.settings.sidebarCollapsed);
+
   syncSettingsInputs();
   updateStationBrand();
 }
@@ -91,7 +103,10 @@ function syncSettingsInputs() {
   document.getElementById("temp-max").value = state.thresholds.tempMax;
   document.getElementById("hum-min").value = state.thresholds.humMin;
   document.getElementById("connection-mode").value = state.settings.connectionMode;
+  document.getElementById("theme-mode").value = state.settings.themeMode;
   document.getElementById("ws-url").value = state.settings.wsUrl;
+  applyTheme();
+  applySidebarMode();
 }
 
 function mountAuthHandlers() {
@@ -132,8 +147,10 @@ function mountDashboardHandlers() {
     state.settings.stationName = document.getElementById("station-name").value.trim() || "Estacion principal";
     state.settings.refreshRate = Number(document.getElementById("refresh-rate").value) || 10;
     state.settings.connectionMode = document.getElementById("connection-mode").value;
+    state.settings.themeMode = document.getElementById("theme-mode").value;
     state.settings.wsUrl = document.getElementById("ws-url").value.trim() || "ws://192.168.1.120:81";
     localStorage.setItem(storageKeys.settings, JSON.stringify(state.settings));
+    applyTheme();
     updateStationBrand();
     restartDataEngine();
     toast("Configuracion guardada", "ok");
@@ -175,6 +192,12 @@ function mountDashboardHandlers() {
   });
 
   document.getElementById("close-modal-btn").addEventListener("click", () => metricModal.close());
+  document.getElementById("export-csv-btn").addEventListener("click", exportCsvData);
+  sidebarToggleBtn.addEventListener("click", () => {
+    state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
+    localStorage.setItem(storageKeys.settings, JSON.stringify(state.settings));
+    applySidebarMode();
+  });
 }
 
 function toggleView(isAuthenticated) {
@@ -202,14 +225,17 @@ function startDataEngine() {
   seedData();
   renderFrame();
   if (state.settings.connectionMode === "ws") {
+    state.connection.shouldReconnect = true;
     connectWebSocket();
   } else {
+    state.connection.shouldReconnect = false;
     connectionStatusText.textContent = "ESP32 online (simulado)";
     timerId = setInterval(renderFrame, Math.max(5000, state.settings.refreshRate * 1000));
   }
 }
 
 function stopDataEngine() {
+  state.connection.shouldReconnect = false;
   if (timerId) {
     clearInterval(timerId);
     timerId = null;
@@ -264,7 +290,7 @@ function disconnectWebSocket() {
 }
 
 function scheduleReconnect() {
-  if (state.settings.connectionMode !== "ws") return;
+  if (!state.connection.shouldReconnect || state.settings.connectionMode !== "ws") return;
   state.connection.attempts += 1;
   const wait = Math.min(12000, 1500 * state.connection.attempts);
   connectionStatusText.textContent = `Desconectado. Reintento en ${Math.round(wait / 1000)}s`;
@@ -380,19 +406,47 @@ function pushData(data) {
   state.tempHistory.push(data.temp);
   state.humHistory.push(data.hum);
   state.pressureHistory.push(data.pressure);
+  state.airHistory.push(data.air);
   if (state.labels.length > MAX_POINTS) {
     state.labels.shift();
     state.tempHistory.shift();
     state.humHistory.shift();
     state.pressureHistory.shift();
+    state.airHistory.shift();
   }
 }
 
 function updateMetrics(data) {
+  const prevTemp = state.tempHistory.at(-2);
+  const prevHum = state.humHistory.at(-2);
+  const prevPressure = state.pressureHistory.at(-2);
+  const prevAir = state.airHistory.at(-2);
+
   tempValue.textContent = data.temp.toFixed(1);
   humValue.textContent = data.hum.toFixed(0);
   presValue.textContent = data.pressure.toFixed(1);
   airValue.textContent = data.air.toFixed(0);
+
+  renderTrend(tempTrend, data.temp, prevTemp, "C");
+  renderTrend(humTrend, data.hum, prevHum, "%");
+  renderTrend(presTrend, data.pressure, prevPressure, "hPa");
+  renderTrend(airTrend, data.air, prevAir, "AQI");
+}
+
+function renderTrend(element, current, previous, unit) {
+  if (!Number.isFinite(previous)) {
+    element.textContent = "Sin variacion";
+    element.classList.remove("up", "down");
+    return;
+  }
+
+  const delta = current - previous;
+  const absDelta = Math.abs(delta);
+  const direction = delta > 0 ? "up" : delta < 0 ? "down" : "";
+  const symbol = delta > 0 ? "Sube" : delta < 0 ? "Baja" : "Igual";
+  element.textContent = `${symbol} ${absDelta.toFixed(1)} ${unit}`;
+  element.classList.remove("up", "down");
+  if (direction) element.classList.add(direction);
 }
 
 function updateCharts() {
@@ -502,6 +556,15 @@ function persistStations() {
   localStorage.setItem(storageKeys.stations, JSON.stringify(state.stations));
 }
 
+function applyTheme() {
+  document.body.dataset.theme = state.settings.themeMode;
+}
+
+function applySidebarMode() {
+  document.body.classList.toggle("sidebar-collapsed", Boolean(state.settings.sidebarCollapsed));
+  sidebarToggleBtn.textContent = state.settings.sidebarCollapsed ? "Expandir" : "Compactar";
+}
+
 function toast(message, type = "ok") {
   const toastNode = document.createElement("div");
   toastNode.className = `toast ${type}`;
@@ -510,6 +573,36 @@ function toast(message, type = "ok") {
   setTimeout(() => {
     toastNode.remove();
   }, 2600);
+}
+
+function exportCsvData() {
+  if (state.labels.length === 0) {
+    toast("No hay datos para exportar", "warn");
+    return;
+  }
+
+  const headers = ["timestamp", "temp_c", "hum_pct", "pressure_hpa", "air_aqi", "station"];
+  const rows = state.labels.map((label, index) => {
+    return [
+      label,
+      state.tempHistory[index]?.toFixed(2) ?? "",
+      state.humHistory[index]?.toFixed(2) ?? "",
+      state.pressureHistory[index]?.toFixed(2) ?? "",
+      state.airHistory[index]?.toFixed(2) ?? "",
+      state.activeStation,
+    ].join(",");
+  });
+
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const safeStation = state.activeStation.toLowerCase().replace(/\s+/g, "-");
+  anchor.href = url;
+  anchor.download = `meteo-${safeStation}-${Date.now()}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  toast("CSV exportado", "ok");
 }
 
 function fakeSensorData() {
