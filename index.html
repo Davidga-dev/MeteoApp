@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Estacion Meteorologica | Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <section id="login-view" class="view active">
+        <div class="auth-shell">
+          <div class="auth-brand">
+            <span class="dot"></span>
+            <span>Meteo Control</span>
+          </div>
+          <h1>Acceso seguro</h1>
+          <p>Panel de monitoreo para estacion meteorologica con ESP32.</p>
+
+          <form id="login-form" class="card auth-card">
+            <label for="email">Correo</label>
+            <input id="email" type="email" placeholder="admin@meteo.local" required />
+
+            <label for="password">Contrasena</label>
+            <input id="password" type="password" placeholder="********" required />
+
+            <button type="submit" class="btn btn-primary">Iniciar sesion</button>
+            <small class="hint">Demo: cualquier correo y minimo 4 caracteres.</small>
+          </form>
+        </div>
+      </section>
+
+      <section id="dashboard-view" class="view">
+        <aside class="sidebar card">
+          <div class="brand">
+            <span class="dot"></span>
+            <div>
+              <strong>Meteo Control</strong>
+              <p>Estacion principal</p>
+            </div>
+          </div>
+          <nav>
+            <button class="nav-item active" data-section="overview">Resumen</button>
+            <button class="nav-item" data-section="charts">Graficos</button>
+            <button class="nav-item" data-section="alerts">Alertas</button>
+            <button class="nav-item" data-section="settings">Configuracion</button>
+          </nav>
+          <button id="logout-btn" class="btn btn-ghost">Cerrar sesion</button>
+        </aside>
+
+        <section class="content">
+          <header class="topbar card">
+            <div>
+              <h2>Dashboard meteorologico</h2>
+              <p id="last-update">Ultima actualizacion: --:--</p>
+            </div>
+            <div class="topbar-right">
+              <div class="status">
+                <span class="status-dot"></span>
+                <span id="connection-status-text">ESP32 online (simulado)</span>
+              </div>
+              <select id="station-switcher" class="top-select"></select>
+              <span id="live-clock" class="clock-pill">--:--:--</span>
+            </div>
+          </header>
+
+          <section id="overview" class="section active">
+            <div class="cards-grid">
+              <article class="metric card metric-clickable" data-metric="temp">
+                <h3>Temperatura</h3>
+                <p><span id="temp-value">--</span> <small>C</small></p>
+              </article>
+              <article class="metric card metric-clickable" data-metric="hum">
+                <h3>Humedad</h3>
+                <p><span id="hum-value">--</span> <small>%</small></p>
+              </article>
+              <article class="metric card metric-clickable" data-metric="pressure">
+                <h3>Presion</h3>
+                <p><span id="pres-value">--</span> <small>hPa</small></p>
+              </article>
+              <article class="metric card metric-clickable" data-metric="air">
+                <h3>Calidad aire</h3>
+                <p><span id="air-value">--</span> <small>AQI</small></p>
+              </article>
+            </div>
+            <div class="two-col">
+              <article class="card climate-card">
+                <h3>Estado del clima</h3>
+                <p id="weather-summary" class="weather-summary">Esperando datos...</p>
+                <div class="mini-metrics">
+                  <span id="wind-value">Viento: -- km/h</span>
+                  <span id="rain-value">Lluvia: -- mm/h</span>
+                </div>
+              </article>
+              <article class="card">
+                <h3>Actividad reciente</h3>
+                <ul id="activity-list" class="activity-list"></ul>
+              </article>
+            </div>
+            <article class="card">
+              <h3>Tendencia rapida</h3>
+              <div class="chart-wrap chart-wrap-sm">
+                <canvas id="temp-chart"></canvas>
+              </div>
+            </article>
+          </section>
+
+          <section id="charts" class="section">
+            <div class="two-col">
+              <article class="card">
+                <h3>Temperatura vs Humedad</h3>
+                <div class="chart-wrap">
+                  <canvas id="combo-chart"></canvas>
+                </div>
+              </article>
+              <article class="card">
+                <h3>Presion atmosferica</h3>
+                <div class="chart-wrap">
+                  <canvas id="pressure-chart"></canvas>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section id="alerts" class="section">
+            <article class="card">
+              <h3>Alertas activas</h3>
+              <ul id="alerts-list" class="alerts-list"></ul>
+            </article>
+            <article class="card">
+              <h3>Configurar umbrales</h3>
+              <form id="threshold-form" class="settings-form">
+                <label for="temp-max">Temp. maxima (C)</label>
+                <input id="temp-max" type="number" min="0" max="60" value="32" />
+
+                <label for="hum-min">Humedad minima (%)</label>
+                <input id="hum-min" type="number" min="0" max="100" value="25" />
+
+                <button type="submit" class="btn btn-primary">Guardar umbrales</button>
+              </form>
+            </article>
+          </section>
+
+          <section id="settings" class="section">
+            <article class="card">
+              <h3>Preferencias del panel</h3>
+              <form id="settings-form" class="settings-form">
+                <label for="station-name">Nombre de estacion</label>
+                <input id="station-name" type="text" value="Estacion principal" />
+
+                <label for="refresh-rate">Refresco (segundos)</label>
+                <input id="refresh-rate" type="number" min="5" max="120" value="10" />
+
+                <label for="connection-mode">Modo de conexion</label>
+                <select id="connection-mode">
+                  <option value="sim">Simulado</option>
+                  <option value="ws">WebSocket</option>
+                </select>
+
+                <label for="ws-url">URL WebSocket</label>
+                <input id="ws-url" type="text" value="ws://192.168.1.120:81" />
+
+                <button type="submit" class="btn btn-primary">Guardar configuracion</button>
+              </form>
+            </article>
+            <article class="card">
+              <h3>Multi-estacion</h3>
+              <form id="station-form" class="settings-form">
+                <label for="new-station-name">Agregar estacion</label>
+                <div class="inline-form">
+                  <input id="new-station-name" type="text" placeholder="Ej: Azotea Norte" />
+                  <button type="submit" class="btn btn-primary">Agregar</button>
+                </div>
+              </form>
+              <ul id="station-list" class="station-list"></ul>
+            </article>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <dialog id="metric-modal" class="metric-modal">
+      <article class="card modal-card">
+        <div class="modal-head">
+          <h3 id="modal-title">Detalle</h3>
+          <button id="close-modal-btn" class="btn btn-ghost">Cerrar</button>
+        </div>
+        <p id="modal-main-value" class="modal-main">--</p>
+        <p id="modal-context" class="hint">Sin datos.</p>
+      </article>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
