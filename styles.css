@@ -646,3 +646,54 @@ body.sidebar-collapsed .nav-item {
     align-items: flex-start;
   }
 }
+
+
+@media (max-width: 680px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  #dashboard-view {
+    padding: 0.6rem;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .content,
+  .section,
+  #overview,
+  .topbar,
+  .topbar-right,
+  .card,
+  .cards-grid,
+  .two-col {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar-right {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-form {
+    flex-direction: column;
+  }
+
+  .chart-wrap {
+    overflow-x: auto;
+  }
+
+  canvas {
+    max-width: 100%;
+  }
+}
